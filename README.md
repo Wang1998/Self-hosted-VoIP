@@ -82,7 +82,7 @@ AT+CFUN=1,1 #重启模块
 
 重启完了以后，可以在minicom里使用 `AT+QCFG="ims"` 查询 VoLTE 激活状态。 如果是 `+QCFG: "ims",1,1`，就代表 VoLTE 已经启用并激活， 如果是 `+QCFG: "ims",1,0` 就代表 VoLTE 启用了但没有激活， 如果是 `+QCFG: "ims",0,0` 则代表 VoLTE 没有启用。
 
-1. 启动UAC —— 优化通话质量
+1. 启动UAC —— 优化通话质量 (如果打电话出现听不见对方没有声音 可能是UAC的问题 不一定是NAT配置问题)
 
 ```bash
 #重新连接串口
@@ -136,13 +136,28 @@ cp uac/quectel.conf /etc/asterisk
 [quectel0]
 audio=/dev/ttyUSB1                       ; tty port for Audio, set as ttyUSB4 for Simcom if no other dev present
 data=/dev/ttyUSB2                        ; tty port for AT commands;no default value
-quec_uac=1                              ; Uncomment line if using UAC mode
-alsadev=hw:CARD=Android,DEV=0           ; Uncomment if using UAC, set device name or index as reqd
+quec_uac=1                              ; Uncomment line if using UAC mode   如果出现没有声音注释掉
+alsadev=hw:CARD=Android,DEV=0           ; Uncomment if using UAC, set device name or index as reqd  如果出现没有声音注释掉
 ```
 
 编辑 `/etc/asterisk/extensions_custom.conf` ，添加以下内容：
 
 ```bash
+; =============================================
+; 发送短信（Groundwire -> EC20 -> 外部号码）
+; =============================================
+[sms-send]
+exten => _X.,1,NoOp(=== Outgoing SMS ===)
+ same => n,NoOp(From: ${MESSAGE(from)})
+ same => n,NoOp(To: ${MESSAGE(to)})
+ same => n,NoOp(Body: ${MESSAGE(body)})
+ same => n,Set(DEST=${EXTEN})
+ same => n,Set(MSG=${MESSAGE(body)})
+ ; 通过 EC20 模块发送短信
+ same => n,System(asterisk -rx 'quectel sms quectel0 ${DEST} "${MSG}"')
+ same => n,NoOp(SMS sent to ${DEST})
+ same => n,Hangup()
+
 [incoming-mobile]
 
 ; ---------------- SMS ----------------
@@ -157,6 +172,16 @@ exten => sms,1,NoOp(Incoming SMS from ${CALLERID(num)})
  same => n,Set(UNREAD_DIR=/var/log/asterisk/unread_sms)
  same => n,Set(UNREAD_FILE=${UNREAD_DIR}/${STRFTIME(${EPOCH},,%Y%m%d%H%M%S)}-${CALLERID(num)}.txt)
  same => n,System(echo "${STRFTIME(${EPOCH},,%Y-%m-%d %H:%M:%S)} - ${QUECTELNAME} - ${CALLERID(num)}\n${DEC_MSG}" >> ${UNREAD_FILE})
+ ; ===== 新增：转发到 Groundwire =====
+ same => n,Set(CLEAN_NUM=${CALLERID(num)})
+ ; 如果以 +86 开头，去掉前3个字符
+ same => n,ExecIf($["${CLEAN_NUM:0:3}" = "+86"]?Set(CLEAN_NUM=${CLEAN_NUM:3}))
+ same => n,Set(MESSAGE(body)=${DEC_MSG})
+ same => n,Set(MESSAGE(body)=${DEC_MSG})
+ ; 你配置账户 这里自己改成你 登录名
+ same => n,MessageSend(pjsip:你配置账户,sip:${CLEAN_NUM}@localhost)
+ same => n,NoOp(SIP MESSAGE sent to 15869283173)
+ ; ===== 新增结束 =====
  same => n,Hangup()
 
 ; ---------------- USSD ----------------
@@ -230,7 +255,7 @@ Issabel*CLI>
 
 选择`Generic PJSIP Device` 。
 
-纯数字填写User Extension，secret可以改成好记的字符串，该配置作为你在手机APP端登陆的用户名和密码，Display Name随便填。`remove_existing = Yes`，`nat = Yes`填完记得点右下角的`Submit`，最后点左上角的`Apply`。
+纯数字填写User Extension，secret可以改成好记的字符串，该配置作为你在手机APP端登陆的用户名和密码，Display Name随便填。 `message_context = sms-send` `remove_existing = Yes`，`nat = Yes`填完记得点右下角的`Submit`，最后点左上角的`Apply`。
 
 ![image](https://github.com/AmorXxx/iPhone_air_esim_tutorial/blob/main/IMG/%E6%B7%BB%E5%8A%A0%E5%88%86%E6%9C%BA.png)
 
