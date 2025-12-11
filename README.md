@@ -180,7 +180,7 @@ exten => sms,1,NoOp(Incoming SMS from ${CALLERID(num)})
  same => n,Set(MESSAGE(body)=${DEC_MSG})
  ; 你配置账户 这里自己改成你 登录名
  same => n,MessageSend(pjsip:你配置账户,sip:${CLEAN_NUM}@localhost)
- same => n,NoOp(SIP MESSAGE sent to 15869283173)
+ same => n,NoOp(SIP MESSAGE sent to 你配置账户)
  ; ===== 新增结束 =====
  same => n,Hangup()
 
